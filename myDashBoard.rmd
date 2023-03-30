@@ -1,0 +1,95 @@
+---
+title: "U.S. Mortality Rates in 2020"
+output:
+  flexdashboard::flex_dashboard
+runtime: shiny
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(DT)
+library(readxl)
+library(knitr)
+library(corrplot)
+startData <- read_excel("Causes of Death.xlsx")
+c1 <- startData[,-1]
+updateData <- reactive(
+  startData %>% group_by(!!! rlang::syms(input$GB)) %>% summarise_if(is.numeric,sum,na.rm=T))
+```
+Inputs {.sidebar}
+-----------------------------------------------------------------------
+```{r}
+selectInput(inputId = "GB", label = "Group By", choices = names(select_if(startData, is.character)))
+selectInput(inputId = "Metric", label = "Metric", choices = names(select_if(startData, is.numeric)))
+selectInput(inputId = "PlotMetric", label = "PlotMetric", choices = names(select_if(c1, is.numeric)))
+```
+
+Column {.tabset .tabset-fade}
+------------------------------------------------------------------------
+### Plot
+```{r}
+renderPlot({
+  updateData() %>%
+  ggplot(aes(x=!! rlang::sym(input$GB), y=!! rlang::sym(input$Metric), fill=!! rlang::sym(input$GB))) +
+  geom_col() +
+    ggtitle("U.S. 2020 Data")
+})
+```
+
+### Summary Stats
+```{r}
+renderPrint({
+  updateData() %>%
+    summary() %>%
+    kable()
+  
+})
+```
+
+### Correlation Table
+```{r}
+renderPrint({
+  kable(cor(as.matrix(c1)))
+})
+```
+
+### Correlation Plot
+```{r}
+renderPlot({
+  corrplot(cor(c1))
+})
+```
+
+### Histogram
+```{r}
+renderPlot({
+  hist(c1[[input$PlotMetric]], xlab = input$PlotMetric, main = paste("Histogram of", input$PlotMetric), col = "#669966", border = "white")
+  
+  abline(v = median(c1[[input$PlotMetric]]), col = "red", lwd = 3)
+  abline(v = mean(c1[[input$PlotMetric]]), col = "green", lwd = 3)
+   legend("topright", legend = c("Median", "Mean"), col = c("red", "green"), lwd = 2)
+})
+```
+
+
+### Boxplot
+```{r}
+renderPlot({
+  ggplot(c1, aes(x = c1[[input$PlotMetric]])) +
+    geom_boxplot() +
+    labs(x=c1[[input$PlotMetric]]) +
+    ggtitle(paste("Boxplot for", input$PlotMetric))
+})
+```
+
+
+### Table
+```{r}
+renderDT(
+updateData(), rownames = F, extensions = 'Buttons', filter="top", editable=T, options = list(
+  dom = 'Blfrtip',
+  buttons = c('copy', 'csv', 'excel', 'pdf', 'print'),
+  lengthMenu = list(c(10,50,100,-1), c(10,50,100,"All"))
+  )
+)
+```
